@@ -1,9 +1,7 @@
 /****************************************************************************************
-* 				uCos-II Semaphore Symcronisation
+*						 uCos-II MailBox
 *****************************************************************************************
 *
-* Program Name : 
-* 
 * MicroEmbedded Technologies
 * Processor : NXP LPC2148
 * Board		: Micro-A748
@@ -15,16 +13,18 @@
 
 void InitBoard(void);
 
+
+
 /*--------------- AAPLICATION STACKS ---------*/
 static  OS_STK  AppTask0stk[256];		/* Create the required number of stacks need for every child task*/
 static  OS_STK  AppTask1stk[256];
 
 /*--------------- CHILDERN TRASKS --------------*/
 static  void  AppTask0(void *p_arg);			 
-static  void  AppTask1(void *p_arg);			 
+static  void  AppTask1(void *p_arg);
 
+OS_EVENT *TxMbox;
 
-OS_EVENT *Sem;                                /* Semaphore  */
 /**********************************************************************************************************
 *                                                main()
 *
@@ -41,94 +41,53 @@ int  main (void)
     InitBoard();
 	OSInit();                                 /* Initialize "uC/OS-II, The Real-Time Kernel"              */
 	
-   
-	Sem = OSSemCreate(0);					/* Create a Semaphore */
+/*----------write your application here------------------*/
+	TxMbox  = OSMboxCreate((void *)0);		/* Create Mailbox	*/
 
-	OSTaskCreate(AppTask0,0,&AppTask0stk[256 - 1],4 );									
-	OSTaskCreate(AppTask1,0,&AppTask1stk[256 - 1],5 );
-    
+	OSTaskCreate(AppTask0,0,&AppTask0stk[256-1],4);
+	OSTaskCreate(AppTask1,0,&AppTask1stk[256-1],5);
+
+/*---------------------------------------------------------*/
 	OSStart();                                                  /* Start multitasking (i.e. give control to uC/OS-II)       */
 }
 
 
-/*******************************************************************************************
-*                                    TASK-0 : AppTask0()
-*
-* Description : 
-*
-* Argument(s) : p_arg       Argument passed to 'AppTask0()' by 'OSTaskCreate()'.
-*
-* Return(s)   : none.
-*
-* Note(s)     : (1) The first line of code is used to prevent a compiler warning 
-*					because 'p_arg' is not used.  The compiler should not generate 
-*					any code for this statement.
-****************************************************************************************/
 static  void  AppTask0 (void *p_arg)
 {
-   unsigned char err;
+   unsigned char msg;
+	unsigned int i;
    	p_arg = p_arg;									   /*Just to avoid compiler Warning 			*/
 
-    while(DEF_TRUE)
-    {     
-	 /* User Code Here */ 
-		do									   /*	Wait till a key is pressed	*/
-		{
-			printf("TASK0: Press any key on Keypad to release Semaphore\n\r");
-			OSTimeDlyHMSM(0,0,2,0);
-		}while(!(GetKey()));
-		OSSemPost(Sem);								   /*	Signal Semaphore	*/
-		OSTimeDlyHMSM(0,0,0,200);
-		do
-		{
-		 	printf("TASK0: Waiting for Semaphore signal\n\r");
-			OSSemPend(Sem,200,&err); 
-		}while(err != OS_NO_ERR);						   /*	Wait on Semaphore	*/
-		printf("TASK0: Semaphore Acquired.... TASK0 will now perform operations....\n\r");
+   
+	while(1)
+    {  
+		printf("TASK0: press any key on PC Keyboard\n\r");
+		OSTimeDlyHMSM(0,0,0,100);   	   	
+		msg = UART_GetChar();
+		OSMboxPost(TxMbox,&msg);
 		OSTimeDlyHMSM(0,0,1,0);
     }
 }
 
-
-/*******************************************************************************************
-*                                    TASK-1 : AppTask1()
-*
-* Description : 
-*
-* Argument(s) : p_arg       Argument passed to 'AppTask1()' by 'OSTaskCreate()'.
-*
-* Return(s)   : none.
-*
-* Note(s)     : (1) The first line of code is used to prevent a compiler warning 
-*					because 'p_arg' is not used.  The compiler should not generate 
-*					any code for this statement.
-****************************************************************************************/
-
-static  void  AppTask1 (void *p_arg)
+static void AppTask1(void *p_arg)
 {
-unsigned char err;
+	unsigned char err, *msg;
    	p_arg = p_arg;											 /* Just to avoid compiler Warning 			*/
 
-   	while(DEF_TRUE)
+	printf("TASK1: Waiting for message from Mailbox\n\r");
+   	while(1)
    	{
-	 /* User Code Here */
-	 	do
-		{
-		 	printf("TASK1: Waiting for Semaphore signal\n\r");
-			OSSemPend(Sem,200,&err);								 /*	Wait on Semaphore	*/
-		}while(err != OS_NO_ERR);
-		printf("TASK1: Semaphore Acquired.... TASK1 will now perform operations....\n\r");
-		OSTimeDlyHMSM(0,0,1,0);								 
-		do												 /*	Wait till a key pressed	*/
-		{
-			OSTimeDlyHMSM(0,0,2,0);
-			printf("TASK1: Press any key on Keypad to release Semaphore\n\r");
-		}while(!(GetKey()));
-		OSSemPost(Sem);										 /*	Signal Semaphore	*/
-		OSTimeDlyHMSM(0,0,0,200);
+	 	/* User Code Here */
+	 	msg = (unsigned char*)OSMboxPend(TxMbox,0,&err);
+		printf("TASK1: Message received....\n\r\n\r");
+		LCD_cmd(0x01);
+		LCD_data(*msg);
+		OSTimeDlyHMSM(0,0,1,0);
 
    	}
 }
+
+
 
 
 /*******************************************************************************************
@@ -151,7 +110,4 @@ void InitBoard(void)
 	LEDInit();	  							/* Initialize LED	*/
 	UartInit(9600);							/* Initialise the UART*/
 }
-
-
-
 
